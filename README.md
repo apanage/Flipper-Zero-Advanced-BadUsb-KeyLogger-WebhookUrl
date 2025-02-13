@@ -8,14 +8,18 @@ Welcome to the **Rubber Ducky BadUSB for Flipper Zero** project! This tool is de
 
 ## 🛠️ Features
 
-- **Keylogger**: Captures keystrokes and logs them to a file.
-- **Screen Sharing**: Takes screenshots and sends them to a Discord webhook.
-- **AMSI Bypass**: Disables AMSI to avoid detection by antivirus software.
-- **Firewall Bypass**: Allows PowerShell to communicate through the firewall.
-- **UAC Bypass**: Elevates privileges to run the script without restrictions.
-- **WMI Event Subscription**: Ensures the script runs on system logon.
-- **Automatic Restart**: Ensures the script runs after shutdown or reboot.
-- **Missing Software Installation**: Installs required dependencies like .NET Framework and PowerShellGet.
+1. Keylogger: Captures keystrokes and logs them to a file.
+2. Screen Sharing: Takes screenshots and sends them to a Discord webhook.
+3. AMSI Bypass: Disables AMSI to avoid detection by antivirus software.
+4. Firewall Bypass: Allows PowerShell to communicate through the firewall by adding a new firewall rule to allow incoming connections on port 8080.
+5. UAC Bypass: Elevates privileges to run the script without restrictions by modifying registry entries, specifically 'EnableLUA'.
+6. WMI Event Subscription: Ensures the script runs on system logon.
+7. Automatic Restart: Ensures the script runs after shutdown or reboot.
+8. Missing Software Installation: Installs required dependencies like .NET Framework and PowerShellGet.
+9. Windows Defender Disablement: Stops and disables Windows Defender service, as well as disables real-time protection, allowing for uninterrupted execution of the script.
+10. Signature Check Disablement: Modifies registry entries to potentially disable signature-based checks, further avoiding detection by security software.
+11. PowerShell Execution Policy Modification: Sets PowerShell execution policy to bypass restrictions, enabling the execution of scripts without limitations.
+12. Optional Restoration of Security Settings: Provides options to restore Windows Defender real-time protection, restart and re-enable Windows Defender service, remove added firewall rules, and re-enable User Account Control (UAC) for system security after script execution is completed.
 
 ---
 
